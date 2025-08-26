@@ -39,6 +39,13 @@ var WalkingLock = {
     
     stopStepUpdates: function(successCallback, errorCallback) {
         exec(successCallback, errorCallback, 'WalkingLock', 'stopStepUpdates', []);
+    },
+     getMovementData: function(successCallback, errorCallback) {
+        exec(successCallback, errorCallback, 'WalkingLock', 'getMovementData', []);
+    },
+    
+    resetMovementCount: function(successCallback, errorCallback) {
+        exec(successCallback, errorCallback, 'WalkingLock', 'resetMovementCount', []);
     }
 };
 

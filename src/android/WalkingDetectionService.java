@@ -40,28 +40,29 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     private static final String CHANNEL_ID = "WalkingLockChannel";
     private static final int NOTIFICATION_ID = 123;
     private static final int TRANSITION_REQUEST_CODE = 100;
-    private static final int STEP_THRESHOLD = 5;
-    private static final int TIME_THRESHOLD = 3000;
     
-    // Contador de pasos
-    private static int totalSteps = 0;
-    private static int sessionSteps = 0;
+    // Detección por acelerómetro
+    private static final float MOVEMENT_THRESHOLD = 2.5f; // Umbral de movimiento
+    private static final int STEP_DETECTION_THRESHOLD = 3; // Pasos para activar
+    private static final long MOVEMENT_TIMEOUT = 3000; // 3 segundos sin movimiento
+    
+    private static int movementCount = 0;
+    private static int totalMovements = 0;
+    private static boolean isMoving = false;
+    private static long lastMovementTime = 0;
     private static long lastUpdateTime = 0;
-    private static final long UPDATE_INTERVAL = 1000; // 1 segundo
+    private static final long UPDATE_INTERVAL = 500; // Actualizar cada 500ms
     
     private static WalkingOverlayView overlayView;
     private ActivityRecognitionClient activityRecognitionClient;
     private PendingIntent transitionPendingIntent;
     private SensorManager sensorManager;
-    private Sensor stepSensor;
-    private Sensor stepDetectorSensor;
-    private int stepCount = 0;
-    private long lastStepTime = 0;
-    private boolean isWalkingDetected = false;
-    private long walkingStartTime = 0;
+    private Sensor accelerometer;
     
-    // Handler para enviar updates a la actividad
     private static Handler stepsHandler;
+    private float[] lastAcceleration = new float[3];
+    private float[] currentAcceleration = new float[3];
+    private long lastSensorTime = 0;
 
     @Override
     public void onCreate() {
@@ -69,26 +70,18 @@ public class WalkingDetectionService extends Service implements SensorEventListe
         createNotificationChannel();
         activityRecognitionClient = ActivityRecognition.getClient(this);
         
-        initializeStepCounter();
+        initializeAccelerometer();
     }
     
-    private void initializeStepCounter() {
+    private void initializeAccelerometer() {
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
-            // Intentar usar STEP_COUNTER (más preciso)
-            stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
-            if (stepSensor != null) {
-                sensorManager.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_NORMAL);
-                Log.d(TAG, "Step counter sensor registered");
+            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            if (accelerometer != null) {
+                sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+                Log.d(TAG, "Acelerómetro registrado correctamente");
             } else {
-                // Fallback: STEP_DETECTOR (menos preciso pero más compatible)
-                stepDetectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
-                if (stepDetectorSensor != null) {
-                    sensorManager.registerListener(this, stepDetectorSensor, SensorManager.SENSOR_DELAY_NORMAL);
-                    Log.d(TAG, "Step detector sensor registered");
-                } else {
-                    Log.w(TAG, "No step sensors available");
-                }
+                Log.e(TAG, "Acelerómetro no disponible en este dispositivo");
             }
         }
     }
@@ -97,13 +90,13 @@ public class WalkingDetectionService extends Service implements SensorEventListe
         stepsHandler = handler;
     }
     
-    private void sendStepsUpdate() {
+    private void sendMovementUpdate() {
         if (stepsHandler != null) {
             Message message = stepsHandler.obtainMessage();
             Bundle bundle = new Bundle();
-            bundle.putInt("totalSteps", totalSteps);
-            bundle.putInt("sessionSteps", sessionSteps);
-            bundle.putBoolean("isWalking", isWalkingDetected);
+            bundle.putInt("movementCount", movementCount);
+            bundle.putInt("totalMovements", totalMovements);
+            bundle.putBoolean("isMoving", isMoving);
             message.setData(bundle);
             stepsHandler.sendMessage(message);
         }
@@ -126,24 +119,24 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     
     @Override
     public IBinder onBind(Intent intent) {
-        return new StepsBinder();
+        return new MovementBinder();
     }
     
-    public class StepsBinder extends android.os.Binder {
+    public class MovementBinder extends android.os.Binder {
         public WalkingDetectionService getService() {
             return WalkingDetectionService.this;
         }
         
-        public int getTotalSteps() {
-            return totalSteps;
+        public int getMovementCount() {
+            return movementCount;
         }
         
-        public int getSessionSteps() {
-            return sessionSteps;
+        public int getTotalMovements() {
+            return totalMovements;
         }
         
-        public boolean isWalking() {
-            return isWalkingDetected;
+        public boolean isMoving() {
+            return isMoving;
         }
     }
     
@@ -160,49 +153,65 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     
     @Override
     public void onSensorChanged(SensorEvent event) {
-        long currentTime = System.currentTimeMillis();
-        
-        if (event.sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
-            // STEP_COUNTER da el total acumulado desde el boot
-            int stepsSinceBoot = (int) event.values[0];
-            if (totalSteps == 0) {
-                totalSteps = stepsSinceBoot;
-            } else {
-                int newSteps = stepsSinceBoot - totalSteps;
-                if (newSteps > 0) {
-                    sessionSteps += newSteps;
-                    totalSteps = stepsSinceBoot;
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            long currentTime = System.currentTimeMillis();
+            
+            // Almacenar aceleraciones anteriores
+            System.arraycopy(currentAcceleration, 0, lastAcceleration, 0, 3);
+            System.arraycopy(event.values, 0, currentAcceleration, 0, 3);
+            
+            // Calcular la diferencia de aceleración
+            float deltaX = Math.abs(currentAcceleration[0] - lastAcceleration[0]);
+            float deltaY = Math.abs(currentAcceleration[1] - lastAcceleration[1]);
+            float deltaZ = Math.abs(currentAcceleration[2] - lastAcceleration[2]);
+            
+            float totalDelta = deltaX + deltaY + deltaZ;
+            
+            // Detectar movimiento significativo
+            if (totalDelta > MOVEMENT_THRESHOLD && 
+                (currentTime - lastSensorTime) > 200) { // Evitar detecciones muy seguidas
+                
+                movementCount++;
+                totalMovements++;
+                lastMovementTime = currentTime;
+                lastSensorTime = currentTime;
+                
+                Log.d(TAG, "Movimiento detectado: " + totalDelta + " - Count: " + movementCount);
+                
+                // Detectar si está caminando
+                if (movementCount >= STEP_DETECTION_THRESHOLD && !isMoving) {
+                    isMoving = true;
+                    Log.d(TAG, "¡Caminando detectado! Mostrando overlay");
+                    showOverlay(this);
                 }
             }
-        } 
-        else if (event.sensor.getType() == Sensor.TYPE_STEP_DETECTOR) {
-            // STEP_DETECTOR da 1.0 por cada paso
-            if (event.values[0] == 1.0f) {
-                totalSteps++;
-                sessionSteps++;
-                
-                // Detección rápida de caminata
-                if (currentTime - lastStepTime < 1000) {
-                    stepCount++;
-                    
-                    if (stepCount >= STEP_THRESHOLD && !isWalkingDetected) {
-                        isWalkingDetected = true;
-                        walkingStartTime = currentTime;
-                        Log.d(TAG, "Walking detected - showing overlay");
-                        showOverlay(this);
-                    }
-                } else {
-                    stepCount = 0;
-                }
-                
-                lastStepTime = currentTime;
+            
+            // Verificar si dejó de moverse
+            if (isMoving && (currentTime - lastMovementTime) > MOVEMENT_TIMEOUT) {
+                isMoving = false;
+                movementCount = 0;
+                Log.d(TAG, "Movimiento detenido. Ocultando overlay");
+                hideOverlay(this);
+            }
+            
+            // Enviar updates periódicamente
+            if (currentTime - lastUpdateTime > UPDATE_INTERVAL) {
+                sendMovementUpdate();
+                updateNotification();
+                lastUpdateTime = currentTime;
             }
         }
-        
-        // Enviar update cada segundo
-        if (currentTime - lastUpdateTime > UPDATE_INTERVAL) {
-            sendStepsUpdate();
-            lastUpdateTime = currentTime;
+    }
+    
+    private void updateNotification() {
+        try {
+            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager != null) {
+                Notification notification = createNotification();
+                manager.notify(NOTIFICATION_ID, notification);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error updating notification: " + e.getMessage());
         }
     }
     
@@ -230,8 +239,8 @@ public class WalkingDetectionService extends Service implements SensorEventListe
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         
-        // Mostrar pasos en la notificación
-        String notificationText = String.format("Pasos: %d | Sesión: %d", totalSteps, sessionSteps);
+        String notificationText = String.format("Movimientos: %d | Estado: %s", 
+            movementCount, isMoving ? "Caminando" : "Detenido");
         
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("SafeWalk Activado")
@@ -243,7 +252,6 @@ public class WalkingDetectionService extends Service implements SensorEventListe
             .build();
     }
     
-    // Resto del código igual...
     private void startActivityRecognition() {
         try {
             List<ActivityTransition> transitions = new ArrayList<>();

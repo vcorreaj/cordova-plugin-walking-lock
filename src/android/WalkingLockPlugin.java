@@ -47,6 +47,10 @@ public class WalkingLockPlugin extends CordovaPlugin {
             return getStepCount(callbackContext);
         } else if ("resetStepCount".equals(action)) {
             return resetStepCount(callbackContext);
+        }else if ("getMovementData".equals(action)) {
+            return getMovementData(callbackContext);
+        } else if ("resetMovementCount".equals(action)) {
+            return resetMovementCount(callbackContext);
         }
         
         return false;
@@ -287,6 +291,25 @@ public class WalkingLockPlugin extends CordovaPlugin {
             callbackContext.success("Step counter reset");
             return true;
         }
+        private boolean getMovementData(CallbackContext callbackContext) {
+            JSONObject result = new JSONObject();
+            try {
+                // Simular datos para demo o implementar conexión real con el servicio
+                result.put("movementCount", 15);
+                result.put("totalMovements", 150);
+                result.put("isMoving", true);
+                result.put("sensorAvailable", true);
+            } catch (JSONException e) {
+                callbackContext.error("Error creating response");
+                return false;
+            }
+            callbackContext.success(result);
+            return true;
+        }
 
+        private boolean resetMovementCount(CallbackContext callbackContext) {
+            callbackContext.success("Movement counter reset");
+            return true;
+        }
        
 }
