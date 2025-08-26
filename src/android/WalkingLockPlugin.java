@@ -67,7 +67,30 @@ public class WalkingLockPlugin extends CordovaPlugin {
         callbackContext.success("Tracking started");
         return true;
     }
-    
+    private boolean hasBodySensorsPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT_WATCH) {
+            return cordova.getActivity().checkSelfPermission(
+                Manifest.permission.BODY_SENSORS
+            ) == PackageManager.PERMISSION_GRANTED;
+        }
+        return true;
+    }
+
+    // Y en checkPermissions:
+    private boolean checkPermissions(CallbackContext callbackContext) {
+        JSONObject result = new JSONObject();
+        try {
+            result.put("overlayPermission", hasOverlayPermission());
+            result.put("activityRecognitionPermission", hasActivityRecognitionPermission());
+            result.put("bodySensorsPermission", hasBodySensorsPermission());
+            result.put("googlePlayServicesAvailable", isGooglePlayServicesAvailable());
+        } catch (JSONException e) {
+            callbackContext.error("Error creating response");
+            return false;
+        }
+        callbackContext.success(result);
+        return true;
+    }
     private boolean stopTracking(CallbackContext callbackContext) {
         Context context = cordova.getActivity().getApplicationContext();
         Intent serviceIntent = new Intent(context, WalkingDetectionService.class);

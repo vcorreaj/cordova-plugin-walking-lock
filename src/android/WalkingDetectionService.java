@@ -9,6 +9,10 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.util.Log;
+import android.hardware.Sensor;
+import android.hardware.SensorManager;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
 
 import com.google.android.gms.location.ActivityRecognition;
 import com.google.android.gms.location.ActivityRecognitionClient;
@@ -27,21 +31,40 @@ import androidx.core.app.NotificationCompat;
 import java.util.ArrayList;
 import java.util.List;
 
-public class WalkingDetectionService extends Service {
+public class WalkingDetectionService extends Service implements SensorEventListener {
     private static final String TAG = "WalkingDetectionService";
     private static final String CHANNEL_ID = "WalkingLockChannel";
     private static final int NOTIFICATION_ID = 123;
     private static final int TRANSITION_REQUEST_CODE = 100;
+    private static final int STEP_THRESHOLD = 5; // Solo 5 pasos para activar
+    private static final int TIME_THRESHOLD = 3000; // 3 segundos de caminata
     
     private static WalkingOverlayView overlayView;
     private ActivityRecognitionClient activityRecognitionClient;
     private PendingIntent transitionPendingIntent;
+    private SensorManager sensorManager;
+    private Sensor stepSensor;
+    private int stepCount = 0;
+    private long lastStepTime = 0;
+    private boolean isWalkingDetected = false;
+    private long walkingStartTime = 0;
 
     @Override
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
         activityRecognitionClient = ActivityRecognition.getClient(this);
+        
+        // Inicializar sensor de pasos para detección más rápida
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        if (sensorManager != null) {
+            stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
+            if (stepSensor != null) {
+                sensorManager.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_NORMAL);
+            } else {
+                Log.w(TAG, "Step counter sensor not available");
+            }
+        }
     }
     
     @Override
@@ -50,7 +73,6 @@ public class WalkingDetectionService extends Service {
             Notification notification = createNotification();
             startForeground(NOTIFICATION_ID, notification);
             
-            // Iniciar reconocimiento de actividad después de iniciar el foreground service
             startActivityRecognition();
             
             return START_STICKY;
@@ -70,6 +92,49 @@ public class WalkingDetectionService extends Service {
         super.onDestroy();
         stopActivityRecognition();
         hideOverlay(this);
+        
+        // Liberar sensor
+        if (sensorManager != null) {
+            sensorManager.unregisterListener(this);
+        }
+    }
+    
+    // SensorEventListener methods
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        if (event.sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
+            long currentTime = System.currentTimeMillis();
+            
+            // Detectar si son pasos consecutivos (caminando)
+            if (currentTime - lastStepTime < 1000) { // Menos de 1 segundo entre pasos
+                stepCount++;
+                
+                if (stepCount >= STEP_THRESHOLD && !isWalkingDetected) {
+                    // Usuario está caminando
+                    isWalkingDetected = true;
+                    walkingStartTime = currentTime;
+                    Log.d(TAG, "Walking detected by step counter - showing overlay");
+                    showOverlay(this);
+                }
+            } else {
+                // Resetear contador si pasó mucho tiempo entre pasos
+                stepCount = 0;
+                
+                // Si ya estaba caminando y pasó el tiempo threshold, ocultar overlay
+                if (isWalkingDetected && currentTime - walkingStartTime > TIME_THRESHOLD) {
+                    isWalkingDetected = false;
+                    Log.d(TAG, "Walking stopped - hiding overlay");
+                    hideOverlay(this);
+                }
+            }
+            
+            lastStepTime = currentTime;
+        }
+    }
+    
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // No necesario
     }
     
     private void createNotificationChannel() {
@@ -88,11 +153,18 @@ public class WalkingDetectionService extends Service {
     }
     
     private Notification createNotification() {
+        Intent intent = new Intent(this, cordova.getActivity().getClass());
+        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Walking Detection")
-            .setContentText("Monitoring walking activity")
+            .setContentTitle("SafeWalk Activado")
+            .setContentText("Monitoreando actividad de caminata")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
             .build();
     }
     
@@ -100,16 +172,20 @@ public class WalkingDetectionService extends Service {
         try {
             List<ActivityTransition> transitions = new ArrayList<>();
             
-            // Detectar cuando empieza a caminar
             transitions.add(new ActivityTransition.Builder()
                 .setActivityType(DetectedActivity.WALKING)
                 .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
                 .build());
             
-            // Detectar cuando deja de caminar
             transitions.add(new ActivityTransition.Builder()
                 .setActivityType(DetectedActivity.WALKING)
                 .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_EXIT)
+                .build());
+            
+            // Añadir detección de movimiento también
+            transitions.add(new ActivityTransition.Builder()
+                .setActivityType(DetectedActivity.ON_FOOT)
+                .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
                 .build());
             
             ActivityTransitionRequest request = new ActivityTransitionRequest(transitions);
@@ -173,20 +249,21 @@ public class WalkingDetectionService extends Service {
         }
     }
     
-    // Método para procesar los resultados de transición de actividad
     public static void handleActivityTransition(Context context, Intent intent) {
         if (ActivityTransitionResult.hasResult(intent)) {
             ActivityTransitionResult result = ActivityTransitionResult.extractResult(intent);
             
             for (ActivityTransitionEvent event : result.getTransitionEvents()) {
-                if (event.getActivityType() == DetectedActivity.WALKING) {
+                Log.d(TAG, "Activity: " + event.getActivityType() + ", Transition: " + event.getTransitionType());
+                
+                if (event.getActivityType() == DetectedActivity.WALKING || 
+                    event.getActivityType() == DetectedActivity.ON_FOOT) {
+                    
                     if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_ENTER) {
-                        // Usuario empezó a caminar
-                        Log.d(TAG, "Walking detected - showing overlay");
+                        Log.d(TAG, "Walking/On Foot detected - showing overlay");
                         showOverlay(context);
                     } else if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
-                        // Usuario dejó de caminar
-                        Log.d(TAG, "Walking stopped - hiding overlay");
+                        Log.d(TAG, "Walking/On Foot stopped - hiding overlay");
                         hideOverlay(context);
                     }
                 }
