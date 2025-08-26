@@ -3,39 +3,44 @@ package com.yourcompany.walkinglock;
 import android.app.Service;
 import android.content.Intent;
 import android.os.IBinder;
-import android.os.Binder;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.util.Log;
 
-import com.google.android.gms.tasks.Task;
-import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.location.ActivityRecognition;
+import com.google.android.gms.location.ActivityRecognitionClient;
 import com.google.android.gms.location.ActivityTransition;
 import com.google.android.gms.location.ActivityTransitionEvent;
+import com.google.android.gms.location.ActivityTransitionRequest;
 import com.google.android.gms.location.ActivityTransitionResult;
 import com.google.android.gms.location.DetectedActivity;
-import com.google.android.gms.location.ActivityTransitionRequest;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.NotificationCompat;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import androidx.core.app.NotificationCompat;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 public class WalkingDetectionService extends Service {
     private static final String TAG = "WalkingDetectionService";
     private static final String CHANNEL_ID = "WalkingLockChannel";
     private static final int NOTIFICATION_ID = 123;
+    private static final int TRANSITION_REQUEST_CODE = 100;
     
     private static WalkingOverlayView overlayView;
-    
+    private ActivityRecognitionClient activityRecognitionClient;
+    private PendingIntent transitionPendingIntent;
+
     @Override
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
+        activityRecognitionClient = ActivityRecognition.getClient(this);
         startActivityRecognition();
     }
     
@@ -54,6 +59,7 @@ public class WalkingDetectionService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        stopActivityRecognition();
         hideOverlay(this);
     }
     
@@ -98,8 +104,10 @@ public class WalkingDetectionService extends Service {
         
         ActivityTransitionRequest request = new ActivityTransitionRequest(transitions);
         
-        Task<Void> task = ActivityRecognition.getClient(this)
-            .requestActivityTransitionUpdates(request, new WalkingActivityTransitionReceiver());
+        Intent intent = new Intent(this, ActivityTransitionReceiver.class);
+        transitionPendingIntent = PendingIntent.getBroadcast(this, TRANSITION_REQUEST_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        
+        Task<Void> task = activityRecognitionClient.requestActivityTransitionUpdates(request, transitionPendingIntent);
         
         task.addOnSuccessListener(new OnSuccessListener<Void>() {
             @Override
@@ -107,6 +115,31 @@ public class WalkingDetectionService extends Service {
                 Log.d(TAG, "Activity transition updates registered successfully");
             }
         });
+        
+        task.addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception e) {
+                Log.e(TAG, "Error registering activity transition updates: " + e.getMessage());
+            }
+        });
+    }
+    
+    private void stopActivityRecognition() {
+        if (transitionPendingIntent != null) {
+            activityRecognitionClient.removeActivityTransitionUpdates(transitionPendingIntent)
+                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        Log.d(TAG, "Activity transition updates removed successfully");
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.e(TAG, "Error removing activity transition updates: " + e.getMessage());
+                    }
+                });
+        }
     }
     
     public static void showOverlay(Context context) {
@@ -123,18 +156,22 @@ public class WalkingDetectionService extends Service {
         }
     }
     
-    private class WalkingActivityTransitionReceiver extends com.google.android.gms.location.ActivityTransitionReceiver {
-        @Override
-        public void onActivityTransition(ActivityTransitionEvent event) {
-            if (event.getActivityType() == DetectedActivity.WALKING) {
-                if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_ENTER) {
-                    // Usuario empezó a caminar
-                    Log.d(TAG, "Walking detected - showing overlay");
-                    showOverlay(WalkingDetectionService.this);
-                } else if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
-                    // Usuario dejó de caminar
-                    Log.d(TAG, "Walking stopped - hiding overlay");
-                    hideOverlay(WalkingDetectionService.this);
+    // Método para procesar los resultados de transición de actividad
+    public static void handleActivityTransition(Context context, Intent intent) {
+        if (ActivityTransitionResult.hasResult(intent)) {
+            ActivityTransitionResult result = ActivityTransitionResult.extractResult(intent);
+            
+            for (ActivityTransitionEvent event : result.getTransitionEvents()) {
+                if (event.getActivityType() == DetectedActivity.WALKING) {
+                    if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_ENTER) {
+                        // Usuario empezó a caminar
+                        Log.d(TAG, "Walking detected - showing overlay");
+                        showOverlay(context);
+                    } else if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
+                        // Usuario dejó de caminar
+                        Log.d(TAG, "Walking stopped - hiding overlay");
+                        hideOverlay(context);
+                    }
                 }
             }
         }
