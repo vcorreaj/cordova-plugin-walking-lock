@@ -42,6 +42,11 @@ public class WalkingLockPlugin extends CordovaPlugin {
             return checkPermissions(callbackContext);
         } else if ("isTracking".equals(action)) {
             return isTracking(callbackContext);
+        }  
+        else if ("getStepCount".equals(action)) {
+            return getStepCount(callbackContext);
+        } else if ("resetStepCount".equals(action)) {
+            return resetStepCount(callbackContext);
         }
         
         return false;
@@ -261,4 +266,27 @@ public class WalkingLockPlugin extends CordovaPlugin {
             }
         }
     }
+    
+        private boolean getStepCount(CallbackContext callbackContext) {
+            JSONObject result = new JSONObject();
+            try {
+                // Aquí implementarías la lógica para obtener los pasos del servicio
+                result.put("totalSteps", 0);
+                result.put("sessionSteps", 0);
+                result.put("isWalking", false);
+            } catch (JSONException e) {
+                callbackContext.error("Error creating response");
+                return false;
+            }
+            callbackContext.success(result);
+            return true;
+        }
+
+        private boolean resetStepCount(CallbackContext callbackContext) {
+            // Aquí implementarías resetear el contador
+            callbackContext.success("Step counter reset");
+            return true;
+        }
+
+       
 }
