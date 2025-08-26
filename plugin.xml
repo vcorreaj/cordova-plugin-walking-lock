@@ -23,8 +23,11 @@
         <source-file src="src/android/WalkingDetectionService.java" target-dir="src/com/yourcompany/walkinglock" />
         <source-file src="src/android/WalkingOverlayView.java" target-dir="src/com/yourcompany/walkinglock" />
         
+        <!-- AGREGAR DEPENDENCIAS DE GOOGLE PLAY SERVICES -->
+        <framework src="com.google.android.gms:play-services-location:17.+" />
+        <framework src="com.google.android.gms:play-services-awareness:18.+" />
+        
         <config-file target="AndroidManifest.xml" parent="/manifest">
-            <!-- Permisos necesarios -->
             <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
             <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
             <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -32,7 +35,6 @@
         </config-file>
         
         <config-file target="AndroidManifest.xml" parent="/manifest/application">
-            <!-- Servicio en primer plano -->
             <service
                 android:name="com.yourcompany.walkinglock.WalkingDetectionService"
                 android:enabled="true"

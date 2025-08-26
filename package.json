@@ -27,7 +27,13 @@
   },
   "homepage": "https://github.com/vcorreaj/cordova-plugin-walking-lock#readme",
   "engines": {
-    "cordova": ">=6.3.0",
-    "cordova-android": ">=6.3.0"
+    "cordova": ">=9.0.0",
+    "cordova-android": ">=9.0.0"
+  },
+  "cordova": {
+    "id": "cordova-plugin-walking-lock",
+    "platforms": [
+      "android"
+    ]
   }
 }
