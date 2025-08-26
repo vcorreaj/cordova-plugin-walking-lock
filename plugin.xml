@@ -23,7 +23,8 @@
         <source-file src="src/android/WalkingDetectionService.java" target-dir="src/com/yourcompany/walkinglock" />
         <source-file src="src/android/WalkingOverlayView.java" target-dir="src/com/yourcompany/walkinglock" />
         <source-file src="src/android/ActivityTransitionReceiver.java" target-dir="src/com/yourcompany/walkinglock" />
-        <!-- DEPENDENCIAS DE GOOGLE PLAY SERVICES CORREGIDAS -->
+        
+        <!-- DEPENDENCIAS DE GOOGLE PLAY SERVICES -->
         <framework src="com.google.android.gms:play-services-location:17.+" />
         <framework src="com.google.android.gms:play-services-tasks:17.+" />
         
@@ -39,15 +40,14 @@
                 android:name="com.yourcompany.walkinglock.WalkingDetectionService"
                 android:enabled="true"
                 android:exported="false" />
-        </config-file>
-        <config-file target="AndroidManifest.xml" parent="/manifest/application">
-            <service
-                android:name="com.yourcompany.walkinglock.WalkingDetectionService"
-                android:enabled="true"
-                android:exported="false" />
+            
             <receiver
                 android:name="com.yourcompany.walkinglock.ActivityTransitionReceiver"
-                android:exported="false" />
+                android:exported="false">
+                <intent-filter>
+                    <action android:name="com.google.android.gms.location.ACTIVITY_TRANSITION" />
+                </intent-filter>
+            </receiver>
         </config-file>
     </platform>
 </plugin>
