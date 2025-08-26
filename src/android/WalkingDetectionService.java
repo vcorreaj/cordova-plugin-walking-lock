@@ -6,7 +6,7 @@ import android.os.IBinder;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent; // ← IMPORTACIÓN AÑADIDA
+import android.app.PendingIntent;
 import android.content.Context;
 import android.util.Log;
 
@@ -42,14 +42,22 @@ public class WalkingDetectionService extends Service {
         super.onCreate();
         createNotificationChannel();
         activityRecognitionClient = ActivityRecognition.getClient(this);
-        startActivityRecognition();
     }
     
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Notification notification = createNotification();
-        startForeground(NOTIFICATION_ID, notification);
-        return START_STICKY;
+        try {
+            Notification notification = createNotification();
+            startForeground(NOTIFICATION_ID, notification);
+            
+            // Iniciar reconocimiento de actividad después de iniciar el foreground service
+            startActivityRecognition();
+            
+            return START_STICKY;
+        } catch (Exception e) {
+            Log.e(TAG, "Error in onStartCommand: " + e.getMessage());
+            return START_NOT_STICKY;
+        }
     }
     
     @Override
@@ -89,40 +97,48 @@ public class WalkingDetectionService extends Service {
     }
     
     private void startActivityRecognition() {
-        List<ActivityTransition> transitions = new ArrayList<>();
-        
-        // Detectar cuando empieza a caminar
-        transitions.add(new ActivityTransition.Builder()
-            .setActivityType(DetectedActivity.WALKING)
-            .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
-            .build());
-        
-        // Detectar cuando deja de caminar
-        transitions.add(new ActivityTransition.Builder()
-            .setActivityType(DetectedActivity.WALKING)
-            .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_EXIT)
-            .build());
-        
-        ActivityTransitionRequest request = new ActivityTransitionRequest(transitions);
-        
-        Intent intent = new Intent(this, ActivityTransitionReceiver.class);
-        transitionPendingIntent = PendingIntent.getBroadcast(this, TRANSITION_REQUEST_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-        
-        Task<Void> task = activityRecognitionClient.requestActivityTransitionUpdates(request, transitionPendingIntent);
-        
-        task.addOnSuccessListener(new OnSuccessListener<Void>() {
-            @Override
-            public void onSuccess(Void aVoid) {
-                Log.d(TAG, "Activity transition updates registered successfully");
+        try {
+            List<ActivityTransition> transitions = new ArrayList<>();
+            
+            // Detectar cuando empieza a caminar
+            transitions.add(new ActivityTransition.Builder()
+                .setActivityType(DetectedActivity.WALKING)
+                .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
+                .build());
+            
+            // Detectar cuando deja de caminar
+            transitions.add(new ActivityTransition.Builder()
+                .setActivityType(DetectedActivity.WALKING)
+                .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_EXIT)
+                .build());
+            
+            ActivityTransitionRequest request = new ActivityTransitionRequest(transitions);
+            
+            Intent intent = new Intent(this, ActivityTransitionReceiver.class);
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                flags |= PendingIntent.FLAG_MUTABLE;
             }
-        });
-        
-        task.addOnFailureListener(new OnFailureListener() {
-            @Override
-            public void onFailure(@NonNull Exception e) {
-                Log.e(TAG, "Error registering activity transition updates: " + e.getMessage());
-            }
-        });
+            transitionPendingIntent = PendingIntent.getBroadcast(this, TRANSITION_REQUEST_CODE, intent, flags);
+            
+            Task<Void> task = activityRecognitionClient.requestActivityTransitionUpdates(request, transitionPendingIntent);
+            
+            task.addOnSuccessListener(new OnSuccessListener<Void>() {
+                @Override
+                public void onSuccess(Void aVoid) {
+                    Log.d(TAG, "Activity transition updates registered successfully");
+                }
+            });
+            
+            task.addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception e) {
+                    Log.e(TAG, "Error registering activity transition updates: " + e.getMessage());
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Exception in startActivityRecognition: " + e.getMessage());
+        }
     }
     
     private void stopActivityRecognition() {

@@ -15,6 +15,14 @@ var WalkingLock = {
     
     requestOverlayPermission: function(successCallback, errorCallback) {
         exec(successCallback, errorCallback, 'WalkingLock', 'requestOverlayPermission', []);
+    },
+    
+    checkPermissions: function(successCallback, errorCallback) {
+        exec(successCallback, errorCallback, 'WalkingLock', 'checkPermissions', []);
+    },
+    
+    isTracking: function(successCallback, errorCallback) {
+        exec(successCallback, errorCallback, 'WalkingLock', 'isTracking', []);
     }
 };
 

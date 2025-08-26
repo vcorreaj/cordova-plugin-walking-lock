@@ -24,22 +24,31 @@
         <source-file src="src/android/WalkingOverlayView.java" target-dir="src/com/yourcompany/walkinglock" />
         <source-file src="src/android/ActivityTransitionReceiver.java" target-dir="src/com/yourcompany/walkinglock" />
         
-        <!-- DEPENDENCIAS DE GOOGLE PLAY SERVICES -->
-        <framework src="com.google.android.gms:play-services-location:17.+" />
-        <framework src="com.google.android.gms:play-services-tasks:17.+" />
+        <!-- DEPENDENCIAS DE GOOGLE PLAY SERVICES ACTUALIZADAS -->
+        <framework src="com.google.android.gms:play-services-location:21.+" />
+        <framework src="com.google.android.gms:play-services-tasks:18.+" />
+        
+        <!-- DEPENDENCIA PARA GOOGLE API AVAILABILITY -->
+        <framework src="com.google.android.gms:play-services-base:18.+" />
         
         <config-file target="AndroidManifest.xml" parent="/manifest">
             <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
             <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+            <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
             <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
             <uses-permission android:name="android.permission.WAKE_LOCK" />
+            
+            <!-- Para Android 10+ -->
+            <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" 
+                android:maxSdkVersion="28" />
         </config-file>
         
         <config-file target="AndroidManifest.xml" parent="/manifest/application">
             <service
                 android:name="com.yourcompany.walkinglock.WalkingDetectionService"
                 android:enabled="true"
-                android:exported="false" />
+                android:exported="false"
+                android:foregroundServiceType="location" />
             
             <receiver
                 android:name="com.yourcompany.walkinglock.ActivityTransitionReceiver"

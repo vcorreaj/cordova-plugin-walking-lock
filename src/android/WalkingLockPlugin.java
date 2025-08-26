@@ -14,6 +14,9 @@ import android.app.Activity;
 import android.Manifest;
 import android.content.pm.PackageManager;
 
+import com.google.android.gms.common.GoogleApiAvailability;
+import com.google.android.gms.common.ConnectionResult;
+
 public class WalkingLockPlugin extends CordovaPlugin {
     
     private static final int REQUEST_CODE_OVERLAY_PERMISSION = 1001;
@@ -34,19 +37,29 @@ public class WalkingLockPlugin extends CordovaPlugin {
             return checkOverlayPermission(callbackContext);
         } else if ("requestOverlayPermission".equals(action)) {
             return requestOverlayPermission(callbackContext);
+        } else if ("checkPermissions".equals(action)) {
+            return checkPermissions(callbackContext);
+        } else if ("isTracking".equals(action)) {
+            return isTracking(callbackContext);
         }
         
         return false;
     }
     
     private boolean startTracking(CallbackContext callbackContext) {
+        // Verificar Google Play Services primero
+        if (!isGooglePlayServicesAvailable()) {
+            callbackContext.error("Google Play Services not available");
+            return false;
+        }
+        
         if (!hasOverlayPermission()) {
             callbackContext.error("Overlay permission not granted");
             return false;
         }
         
         if (!hasActivityRecognitionPermission()) {
-            requestActivityRecognitionPermission();
+            requestActivityRecognitionPermission(callbackContext);
             return true;
         }
         
@@ -67,7 +80,6 @@ public class WalkingLockPlugin extends CordovaPlugin {
     }
     
     private boolean checkOverlayPermission(CallbackContext callbackContext) {
-        // CORREGIDO: Usar JSONObject para boolean
         JSONObject result = new JSONObject();
         try {
             result.put("hasPermission", hasOverlayPermission());
@@ -81,7 +93,6 @@ public class WalkingLockPlugin extends CordovaPlugin {
     
     private boolean requestOverlayPermission(CallbackContext callbackContext) {
         if (hasOverlayPermission()) {
-            // CORREGIDO: Usar JSONObject para boolean
             JSONObject result = new JSONObject();
             try {
                 result.put("granted", true);
@@ -105,6 +116,33 @@ public class WalkingLockPlugin extends CordovaPlugin {
         return true;
     }
     
+    private boolean checkPermissions(CallbackContext callbackContext) {
+        JSONObject result = new JSONObject();
+        try {
+            result.put("overlayPermission", hasOverlayPermission());
+            result.put("activityRecognitionPermission", hasActivityRecognitionPermission());
+            result.put("googlePlayServicesAvailable", isGooglePlayServicesAvailable());
+        } catch (JSONException e) {
+            callbackContext.error("Error creating response");
+            return false;
+        }
+        callbackContext.success(result);
+        return true;
+    }
+    
+    private boolean isTracking(CallbackContext callbackContext) {
+        // Este método podría implementarse para verificar si el servicio está corriendo
+        JSONObject result = new JSONObject();
+        try {
+            result.put("isTracking", false); // Implementar lógica real si es necesario
+        } catch (JSONException e) {
+            callbackContext.error("Error creating response");
+            return false;
+        }
+        callbackContext.success(result);
+        return true;
+    }
+    
     private boolean hasOverlayPermission() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             return Settings.canDrawOverlays(cordova.getActivity());
@@ -121,13 +159,25 @@ public class WalkingLockPlugin extends CordovaPlugin {
         return true;
     }
     
-    private void requestActivityRecognitionPermission() {
+    private boolean isGooglePlayServicesAvailable() {
+        GoogleApiAvailability apiAvailability = GoogleApiAvailability.getInstance();
+        int resultCode = apiAvailability.isGooglePlayServicesAvailable(cordova.getActivity());
+        return resultCode == ConnectionResult.SUCCESS;
+    }
+    
+    private void requestActivityRecognitionPermission(CallbackContext callbackContext) {
+        this.currentCallbackContext = callbackContext;
+        
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             cordova.requestPermission(
                 this, 
                 REQUEST_CODE_ACTIVITY_RECOGNITION, 
                 Manifest.permission.ACTIVITY_RECOGNITION
             );
+        } else {
+            // Para versiones anteriores, iniciar directamente
+            startDetectionService();
+            callbackContext.success("Tracking started");
         }
     }
     
@@ -162,7 +212,6 @@ public class WalkingLockPlugin extends CordovaPlugin {
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         if (requestCode == REQUEST_CODE_OVERLAY_PERMISSION) {
             if (waitingForOverlayPermission && currentCallbackContext != null) {
-                // CORREGIDO: Usar JSONObject para boolean
                 JSONObject result = new JSONObject();
                 try {
                     result.put("granted", hasOverlayPermission());
