@@ -21,6 +21,7 @@ public class WalkingLockPlugin extends CordovaPlugin {
     
     private static final int REQUEST_CODE_OVERLAY_PERMISSION = 1001;
     private static final int REQUEST_CODE_ACTIVITY_RECOGNITION = 1002;
+    private static final int REQUEST_CODE_BODY_SENSORS = 1003;
     
     private CallbackContext currentCallbackContext;
     private boolean waitingForOverlayPermission = false;
@@ -63,34 +64,16 @@ public class WalkingLockPlugin extends CordovaPlugin {
             return true;
         }
         
+        if (!hasBodySensorsPermission()) {
+            requestBodySensorsPermission(callbackContext);
+            return true;
+        }
+        
         startDetectionService();
         callbackContext.success("Tracking started");
         return true;
     }
-    private boolean hasBodySensorsPermission() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT_WATCH) {
-            return cordova.getActivity().checkSelfPermission(
-                Manifest.permission.BODY_SENSORS
-            ) == PackageManager.PERMISSION_GRANTED;
-        }
-        return true;
-    }
-
-    // Y en checkPermissions:
-    private boolean checkPermissions(CallbackContext callbackContext) {
-        JSONObject result = new JSONObject();
-        try {
-            result.put("overlayPermission", hasOverlayPermission());
-            result.put("activityRecognitionPermission", hasActivityRecognitionPermission());
-            result.put("bodySensorsPermission", hasBodySensorsPermission());
-            result.put("googlePlayServicesAvailable", isGooglePlayServicesAvailable());
-        } catch (JSONException e) {
-            callbackContext.error("Error creating response");
-            return false;
-        }
-        callbackContext.success(result);
-        return true;
-    }
+    
     private boolean stopTracking(CallbackContext callbackContext) {
         Context context = cordova.getActivity().getApplicationContext();
         Intent serviceIntent = new Intent(context, WalkingDetectionService.class);
@@ -144,6 +127,7 @@ public class WalkingLockPlugin extends CordovaPlugin {
         try {
             result.put("overlayPermission", hasOverlayPermission());
             result.put("activityRecognitionPermission", hasActivityRecognitionPermission());
+            result.put("bodySensorsPermission", hasBodySensorsPermission());
             result.put("googlePlayServicesAvailable", isGooglePlayServicesAvailable());
         } catch (JSONException e) {
             callbackContext.error("Error creating response");
@@ -154,10 +138,9 @@ public class WalkingLockPlugin extends CordovaPlugin {
     }
     
     private boolean isTracking(CallbackContext callbackContext) {
-        // Este método podría implementarse para verificar si el servicio está corriendo
         JSONObject result = new JSONObject();
         try {
-            result.put("isTracking", false); // Implementar lógica real si es necesario
+            result.put("isTracking", false);
         } catch (JSONException e) {
             callbackContext.error("Error creating response");
             return false;
@@ -182,6 +165,15 @@ public class WalkingLockPlugin extends CordovaPlugin {
         return true;
     }
     
+    private boolean hasBodySensorsPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT_WATCH) {
+            return cordova.getActivity().checkSelfPermission(
+                Manifest.permission.BODY_SENSORS
+            ) == PackageManager.PERMISSION_GRANTED;
+        }
+        return true;
+    }
+    
     private boolean isGooglePlayServicesAvailable() {
         GoogleApiAvailability apiAvailability = GoogleApiAvailability.getInstance();
         int resultCode = apiAvailability.isGooglePlayServicesAvailable(cordova.getActivity());
@@ -198,7 +190,21 @@ public class WalkingLockPlugin extends CordovaPlugin {
                 Manifest.permission.ACTIVITY_RECOGNITION
             );
         } else {
-            // Para versiones anteriores, iniciar directamente
+            startDetectionService();
+            callbackContext.success("Tracking started");
+        }
+    }
+    
+    private void requestBodySensorsPermission(CallbackContext callbackContext) {
+        this.currentCallbackContext = callbackContext;
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT_WATCH) {
+            cordova.requestPermission(
+                this, 
+                REQUEST_CODE_BODY_SENSORS, 
+                Manifest.permission.BODY_SENSORS
+            );
+        } else {
             startDetectionService();
             callbackContext.success("Tracking started");
         }
@@ -219,14 +225,22 @@ public class WalkingLockPlugin extends CordovaPlugin {
     public void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) throws JSONException {
         if (requestCode == REQUEST_CODE_ACTIVITY_RECOGNITION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startDetectionService();
-                if (currentCallbackContext != null) {
+                // Ahora verificar también permiso de sensores corporales
+                if (hasBodySensorsPermission()) {
+                    startDetectionService();
                     currentCallbackContext.success("Tracking started");
+                } else {
+                    requestBodySensorsPermission(currentCallbackContext);
                 }
             } else {
-                if (currentCallbackContext != null) {
-                    currentCallbackContext.error("Activity recognition permission denied");
-                }
+                currentCallbackContext.error("Activity recognition permission denied");
+            }
+        } else if (requestCode == REQUEST_CODE_BODY_SENSORS) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startDetectionService();
+                currentCallbackContext.success("Tracking started");
+            } else {
+                currentCallbackContext.error("Body sensors permission denied");
             }
         }
     }

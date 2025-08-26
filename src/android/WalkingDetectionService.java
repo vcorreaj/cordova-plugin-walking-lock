@@ -36,8 +36,8 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     private static final String CHANNEL_ID = "WalkingLockChannel";
     private static final int NOTIFICATION_ID = 123;
     private static final int TRANSITION_REQUEST_CODE = 100;
-    private static final int STEP_THRESHOLD = 5; // Solo 5 pasos para activar
-    private static final int TIME_THRESHOLD = 3000; // 3 segundos de caminata
+    private static final int STEP_THRESHOLD = 5;
+    private static final int TIME_THRESHOLD = 3000;
     
     private static WalkingOverlayView overlayView;
     private ActivityRecognitionClient activityRecognitionClient;
@@ -55,12 +55,13 @@ public class WalkingDetectionService extends Service implements SensorEventListe
         createNotificationChannel();
         activityRecognitionClient = ActivityRecognition.getClient(this);
         
-        // Inicializar sensor de pasos para detección más rápida
+        // Inicializar sensor de pasos
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
             stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER);
             if (stepSensor != null) {
                 sensorManager.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_NORMAL);
+                Log.d(TAG, "Step counter sensor registered");
             } else {
                 Log.w(TAG, "Step counter sensor not available");
             }
@@ -93,34 +94,28 @@ public class WalkingDetectionService extends Service implements SensorEventListe
         stopActivityRecognition();
         hideOverlay(this);
         
-        // Liberar sensor
         if (sensorManager != null) {
             sensorManager.unregisterListener(this);
         }
     }
     
-    // SensorEventListener methods
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() == Sensor.TYPE_STEP_COUNTER) {
             long currentTime = System.currentTimeMillis();
             
-            // Detectar si son pasos consecutivos (caminando)
-            if (currentTime - lastStepTime < 1000) { // Menos de 1 segundo entre pasos
+            if (currentTime - lastStepTime < 1000) {
                 stepCount++;
                 
                 if (stepCount >= STEP_THRESHOLD && !isWalkingDetected) {
-                    // Usuario está caminando
                     isWalkingDetected = true;
                     walkingStartTime = currentTime;
                     Log.d(TAG, "Walking detected by step counter - showing overlay");
                     showOverlay(this);
                 }
             } else {
-                // Resetear contador si pasó mucho tiempo entre pasos
                 stepCount = 0;
                 
-                // Si ya estaba caminando y pasó el tiempo threshold, ocultar overlay
                 if (isWalkingDetected && currentTime - walkingStartTime > TIME_THRESHOLD) {
                     isWalkingDetected = false;
                     Log.d(TAG, "Walking stopped - hiding overlay");
@@ -134,7 +129,6 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
-        // No necesario
     }
     
     private void createNotificationChannel() {
@@ -153,8 +147,9 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     }
     
     private Notification createNotification() {
-        Intent intent = new Intent(this, cordova.getActivity().getClass());
-        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        // CORRECCIÓN: Usar el contexto del servicio directamente
+        // Crear un intent para abrir la app principal
+        Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         
@@ -182,7 +177,6 @@ public class WalkingDetectionService extends Service implements SensorEventListe
                 .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_EXIT)
                 .build());
             
-            // Añadir detección de movimiento también
             transitions.add(new ActivityTransition.Builder()
                 .setActivityType(DetectedActivity.ON_FOOT)
                 .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
