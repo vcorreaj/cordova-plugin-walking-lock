@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
+        id="cordova-plugin-walking-lock"
+        version="1.0.0">
+    
+    <name>WalkingLock</name>
+    <description>Cordova Plugin for detecting walking activity and showing overlay lock</description>
+    <license>MIT</license>
+    <keywords>cordova,android,activity,recognition,walking,lock</keywords>
+    
+    <js-module src="www/WalkingLock.js" name="WalkingLock">
+        <clobbers target="WalkingLock" />
+    </js-module>
+    
+    <platform name="android">
+        <config-file target="config.xml" parent="/*">
+            <feature name="WalkingLock">
+                <param name="android-package" value="com.yourcompany.walkinglock.WalkingLockPlugin"/>
+            </feature>
+        </config-file>
+        
+        <source-file src="src/android/WalkingLockPlugin.java" target-dir="src/com/yourcompany/walkinglock" />
+        <source-file src="src/android/WalkingDetectionService.java" target-dir="src/com/yourcompany/walkinglock" />
+        <source-file src="src/android/WalkingOverlayView.java" target-dir="src/com/yourcompany/walkinglock" />
+        
+        <config-file target="AndroidManifest.xml" parent="/manifest">
+            <!-- Permisos necesarios -->
+            <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+            <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+            <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+            <uses-permission android:name="android.permission.WAKE_LOCK" />
+        </config-file>
+        
+        <config-file target="AndroidManifest.xml" parent="/manifest/application">
+            <!-- Servicio en primer plano -->
+            <service
+                android:name="com.yourcompany.walkinglock.WalkingDetectionService"
+                android:enabled="true"
+                android:exported="false" />
+        </config-file>
+    </platform>
+</plugin>
