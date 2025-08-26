@@ -1,0 +1,33 @@
+{
+  "name": "cordova-plugin-walking-lock",
+  "version": "1.0.0",
+  "description": "Cordova Plugin for detecting walking activity and showing overlay lock",
+  "main": "www/WalkingLock.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "cordova",
+    "android",
+    "activity",
+    "recognition",
+    "walking",
+    "lock",
+    "ecosystem:cordova",
+    "cordova-android"
+  ],
+  "author": "Tu Nombre",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vcorreaj/cordova-plugin-walking-lock.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vcorreaj/cordova-plugin-walking-lock/issues"
+  },
+  "homepage": "https://github.com/vcorreaj/cordova-plugin-walking-lock#readme",
+  "engines": {
+    "cordova": ">=6.3.0",
+    "cordova-android": ">=6.3.0"
+  }
+}
