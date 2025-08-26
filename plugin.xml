@@ -23,9 +23,9 @@
         <source-file src="src/android/WalkingDetectionService.java" target-dir="src/com/yourcompany/walkinglock" />
         <source-file src="src/android/WalkingOverlayView.java" target-dir="src/com/yourcompany/walkinglock" />
         
-        <!-- AGREGAR DEPENDENCIAS DE GOOGLE PLAY SERVICES -->
+        <!-- DEPENDENCIAS DE GOOGLE PLAY SERVICES CORREGIDAS -->
         <framework src="com.google.android.gms:play-services-location:17.+" />
-        <framework src="com.google.android.gms:play-services-awareness:18.+" />
+        <framework src="com.google.android.gms:play-services-tasks:17.+" />
         
         <config-file target="AndroidManifest.xml" parent="/manifest">
             <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
