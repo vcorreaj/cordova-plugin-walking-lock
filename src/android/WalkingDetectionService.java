@@ -65,7 +65,7 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     private long lastSensorTime = 0;
     private static long lastManualUnlockTime = 0;
     private static boolean isManuallyUnlocked = false;
-
+    private BroadcastReceiver manualUnlockReceiver;
     @Override
     public void onCreate() {
         super.onCreate();
@@ -239,12 +239,12 @@ public void onSensorChanged(SensorEvent event) {
         }
         
         // Verificar si dejó de moverse
-        if (isMoving && (currentTime - lastMovementTime) > MOVEMENT_TIMEOUT) {
-            isMoving = false;
-            movementCount = 0;
-            Log.d(TAG, "Movimiento detenido. Ocultando overlay");
-            hideOverlay(this);
-        }
+        // if (isMoving && (currentTime - lastMovementTime) > MOVEMENT_TIMEOUT) {
+        //     isMoving = false;
+        //     movementCount = 0;
+        //     Log.d(TAG, "Movimiento detenido. Ocultando overlay");
+        //     hideOverlay(this);
+        // }
         
         // Enviar updates periódicamente
         if (currentTime - lastUpdateTime > UPDATE_INTERVAL) {
@@ -367,6 +367,12 @@ public void onSensorChanged(SensorEvent event) {
     }
     
     public static void showOverlay(Context context) {
+        // No mostrar overlay si está desbloqueado manualmente
+        if (isManuallyUnlocked) {
+            Log.d(TAG, "No mostrar overlay - desbloqueo manual activo");
+            return;
+        }
+        
         if (overlayView == null) {
             overlayView = new WalkingOverlayView(context);
         }
@@ -399,12 +405,54 @@ public static void handleActivityTransition(Context context, Intent intent) {
                 if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_ENTER) {
                     Log.d(TAG, "Walking/On Foot detected - showing overlay");
                     showOverlay(context);
-                } else if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
-                    Log.d(TAG, "Walking/On Foot stopped - hiding overlay");
-                    hideOverlay(context);
-                }
+                } 
+                // else if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
+                //     Log.d(TAG, "Walking/On Foot stopped - hiding overlay");
+                //     hideOverlay(context);
+                // }
             }
         }
+    }
+}
+@Override
+public void onCreate() {
+    super.onCreate();
+    createNotificationChannel();
+    activityRecognitionClient = ActivityRecognition.getClient(this);
+    
+    initializeAccelerometer();
+    
+    // Registrar receiver para desbloqueo manual
+    manualUnlockReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if ("MANUAL_UNLOCK_ACTION".equals(intent.getAction())) {
+                Log.d(TAG, "Recibido broadcast de desbloqueo manual");
+                setManualUnlock(true);
+                isMoving = false;
+                movementCount = 0;
+            }
+        }
+    };
+    
+    IntentFilter filter = new IntentFilter("MANUAL_UNLOCK_ACTION");
+    registerReceiver(manualUnlockReceiver, filter);
+}
+
+// En el método onDestroy, desregistrar el receiver:
+@Override
+public void onDestroy() {
+    super.onDestroy();
+    stopActivityRecognition();
+    hideOverlay(this);
+    
+    if (sensorManager != null) {
+        sensorManager.unregisterListener(this);
+    }
+    
+    // Desregistrar receiver
+    if (manualUnlockReceiver != null) {
+        unregisterReceiver(manualUnlockReceiver);
     }
 }
 }

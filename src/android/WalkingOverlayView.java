@@ -95,9 +95,9 @@ public class WalkingOverlayView {
                 hide();
                 
                 // Notificar al servicio que se desbloqueó manualmente
-                if (context instanceof WalkingDetectionService) {
-                    ((WalkingDetectionService) context).setManualUnlock(true);
-                }
+                // Usar broadcast o intent para comunicarse con el servicio
+                Intent unlockIntent = new Intent("MANUAL_UNLOCK_ACTION");
+                context.sendBroadcast(unlockIntent);
             }
         });
         

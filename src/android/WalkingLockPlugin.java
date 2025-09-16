@@ -61,10 +61,20 @@ public class WalkingLockPlugin extends CordovaPlugin {
         }
         else if ("resetManualUnlock".equals(action)) {
             return resetManualUnlock(callbackContext);
-        }
+        }else if ("forceShowOverlay".equals(action)) {
+    return forceShowOverlay(callbackContext);
+}
         
         return false;
     }
+    private boolean forceShowOverlay(CallbackContext callbackContext) {
+    Context context = cordova.getActivity().getApplicationContext();
+    WalkingDetectionService.setManualUnlock(false);
+    WalkingDetectionService.showOverlay(context);
+    
+    callbackContext.success("Overlay forced to show");
+    return true;
+}
 private boolean manualUnlock(CallbackContext callbackContext) {
     Context context = cordova.getActivity().getApplicationContext();
     WalkingDetectionService.setManualUnlock(true);
