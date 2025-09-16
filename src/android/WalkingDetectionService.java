@@ -40,7 +40,7 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     private static final String CHANNEL_ID = "WalkingLockChannel";
     private static final int NOTIFICATION_ID = 123;
     private static final int TRANSITION_REQUEST_CODE = 100;
-    
+    private static boolean manualUnlock = false;
     // Detección por acelerómetro
     private static final float MOVEMENT_THRESHOLD = 2.5f; // Umbral de movimiento
     private static final int STEP_DETECTION_THRESHOLD = 3; // Pasos para activar
@@ -152,57 +152,54 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     }
     
     @Override
-    public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-            long currentTime = System.currentTimeMillis();
+public void onSensorChanged(SensorEvent event) {
+    if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+        long currentTime = System.currentTimeMillis();
+        
+        // Si fue desbloqueo manual, resetear flag después de un tiempo
+        if (manualUnlock && (currentTime - lastMovementTime) > 5000) {
+            manualUnlock = false;
+            Log.d(TAG, "Reiniciando detección después de desbloqueo manual");
+        }
+        
+        // Almacenar aceleraciones anteriores
+        System.arraycopy(currentAcceleration, 0, lastAcceleration, 0, 3);
+        System.arraycopy(event.values, 0, currentAcceleration, 0, 3);
+        
+        // Calcular la diferencia de aceleración
+        float deltaX = Math.abs(currentAcceleration[0] - lastAcceleration[0]);
+        float deltaY = Math.abs(currentAcceleration[1] - lastAcceleration[1]);
+        float deltaZ = Math.abs(currentAcceleration[2] - lastAcceleration[2]);
+        
+        float totalDelta = deltaX + deltaY + deltaZ;
+        
+        // Detectar movimiento significativo (solo si no fue desbloqueo manual reciente)
+        if (!manualUnlock && totalDelta > MOVEMENT_THRESHOLD && 
+            (currentTime - lastSensorTime) > 200) {
             
-            // Almacenar aceleraciones anteriores
-            System.arraycopy(currentAcceleration, 0, lastAcceleration, 0, 3);
-            System.arraycopy(event.values, 0, currentAcceleration, 0, 3);
+            movementCount++;
+            totalMovements++;
+            lastMovementTime = currentTime;
+            lastSensorTime = currentTime;
             
-            // Calcular la diferencia de aceleración
-            float deltaX = Math.abs(currentAcceleration[0] - lastAcceleration[0]);
-            float deltaY = Math.abs(currentAcceleration[1] - lastAcceleration[1]);
-            float deltaZ = Math.abs(currentAcceleration[2] - lastAcceleration[2]);
+            Log.d(TAG, "Movimiento detectado: " + totalDelta + " - Count: " + movementCount);
             
-            float totalDelta = deltaX + deltaY + deltaZ;
-            
-            // Detectar movimiento significativo
-            if (totalDelta > MOVEMENT_THRESHOLD && 
-                (currentTime - lastSensorTime) > 200) { // Evitar detecciones muy seguidas
-                
-                movementCount++;
-                totalMovements++;
-                lastMovementTime = currentTime;
-                lastSensorTime = currentTime;
-                
-                Log.d(TAG, "Movimiento detectado: " + totalDelta + " - Count: " + movementCount);
-                
-                // Detectar si está caminando
-                if (movementCount >= STEP_DETECTION_THRESHOLD && !isMoving) {
-                    isMoving = true;
-                    Log.d(TAG, "¡Caminando detectado! Mostrando overlay");
-                    showOverlay(this);
-                }
-            }
-            
-            // Verificar si dejó de moverse
-            // if (isMoving && (currentTime - lastMovementTime) > MOVEMENT_TIMEOUT) {
-            //     isMoving = false;
-            //     movementCount = 0;
-            //     Log.d(TAG, "Movimiento detenido. Ocultando overlay");
-            //     hideOverlay(this);
-            // }
-            
-            // Enviar updates periódicamente
-            if (currentTime - lastUpdateTime > UPDATE_INTERVAL) {
-                sendMovementUpdate();
-                updateNotification();
-                lastUpdateTime = currentTime;
+            // Detectar si está caminando
+            if (movementCount >= STEP_DETECTION_THRESHOLD && !isMoving) {
+                isMoving = true;
+                Log.d(TAG, "¡Caminando detectado! Mostrando overlay");
+                showOverlay(this);
             }
         }
+        
+        // Enviar updates periódicamente
+        if (currentTime - lastUpdateTime > UPDATE_INTERVAL) {
+            sendMovementUpdate();
+            updateNotification();
+            lastUpdateTime = currentTime;
+        }
     }
-    
+}
     private void updateNotification() {
         try {
             NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -321,11 +318,15 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     }
     
     public static void hideOverlay(Context context) {
-        if (overlayView != null) {
-            overlayView.hide();
-            overlayView = null;
-        }
+    if (overlayView != null) {
+        overlayView.hide();
+        overlayView = null;
+        isMoving = false; // Resetear estado de movimiento
+        movementCount = 0; // Resetear contador
+        manualUnlock = true; // Marcar que fue desbloqueo manual
+        Log.d(TAG, "Overlay ocultado manualmente, resetando estado");
     }
+}
     
     public static void handleActivityTransition(Context context, Intent intent) {
         if (ActivityTransitionResult.hasResult(intent)) {

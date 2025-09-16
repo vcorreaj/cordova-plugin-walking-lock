@@ -54,18 +54,34 @@ public class WalkingOverlayView {
             e.printStackTrace();
         }
     }
-    
-    public void hide() {
-        if (overlayView != null) {
-            try {
-                windowManager.removeView(overlayView);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            overlayView = null;
-            isLocked = false;
+    // Añadir un callback para notificar cuando se desbloquea manualmente
+public interface UnlockListener {
+    void onManualUnlock();
+}
+
+private static UnlockListener unlockListener;
+
+public static void setUnlockListener(UnlockListener listener) {
+    unlockListener = listener;
+}
+
+// Modificar el método hide
+public void hide() {
+    if (overlayView != null) {
+        try {
+            windowManager.removeView(overlayView);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        overlayView = null;
+        isLocked = false;
+        
+        // Notificar que fue desbloqueo manual
+        if (unlockListener != null) {
+            unlockListener.onManualUnlock();
         }
     }
+}
     
     public static boolean isLocked() {
         return isLocked;
@@ -121,4 +137,5 @@ public class WalkingOverlayView {
             return WindowManager.LayoutParams.TYPE_SYSTEM_ALERT;
         }
     }
+    
 }
