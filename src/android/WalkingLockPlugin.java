@@ -51,11 +51,46 @@ public class WalkingLockPlugin extends CordovaPlugin {
             return getMovementData(callbackContext);
         } else if ("resetMovementCount".equals(action)) {
             return resetMovementCount(callbackContext);
+        }else if ("manualUnlock".equals(action)) {
+            return manualUnlock(callbackContext);
+        }else if ("manualUnlock".equals(action)) {
+            return manualUnlock(callbackContext);
+        }
+        else if ("isManuallyUnlocked".equals(action)) {
+            return isManuallyUnlocked(callbackContext);
+        }
+        else if ("resetManualUnlock".equals(action)) {
+            return resetManualUnlock(callbackContext);
         }
         
         return false;
     }
+private boolean manualUnlock(CallbackContext callbackContext) {
+    Context context = cordova.getActivity().getApplicationContext();
+    WalkingDetectionService.setManualUnlock(true);
+    WalkingDetectionService.hideOverlay(context);
     
+    callbackContext.success("Manually unlocked");
+    return true;
+}
+
+private boolean isManuallyUnlocked(CallbackContext callbackContext) {
+    JSONObject result = new JSONObject();
+    try {
+        result.put("isManuallyUnlocked", WalkingDetectionService.isManuallyUnlocked());
+    } catch (JSONException e) {
+        callbackContext.error("Error creating response");
+        return false;
+    }
+    callbackContext.success(result);
+    return true;
+}
+
+private boolean resetManualUnlock(CallbackContext callbackContext) {
+    WalkingDetectionService.setManualUnlock(false);
+    callbackContext.success("Manual unlock reset");
+    return true;
+}
     private boolean startTracking(CallbackContext callbackContext) {
         // Verificar Google Play Services primero
         if (!isGooglePlayServicesAvailable()) {
