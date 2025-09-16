@@ -68,33 +68,33 @@ public class WalkingLockPlugin extends CordovaPlugin {
         
         return false;
     } 
-    private boolean setSensitivity(JSONArray args, CallbackContext callbackContext) {
-        try {
-            float movementThreshold = (float) args.getDouble(0);
-            int stepThreshold = args.getInt(1);
-            
-            WalkingDetectionService.setSensitivity(movementThreshold, stepThreshold);
-            
-            callbackContext.success("Sensitivity updated");
-            return true;
-        } catch (JSONException e) {
-            callbackContext.error("Error parsing sensitivity parameters");
-            return false;
-        }
-    }
-
-    private boolean getSensitivity(CallbackContext callbackContext) {
-        JSONObject result = new JSONObject();
-        try {
-            result.put("movementThreshold", WalkingDetectionService.getMovementThreshold());
-            result.put("stepThreshold", WalkingDetectionService.getStepDetectionThreshold());
-        } catch (JSONException e) {
-            callbackContext.error("Error creating response");
-            return false;
-        }
-        callbackContext.success(result);
+private boolean setSensitivity(JSONArray args, CallbackContext callbackContext) {
+    try {
+        float movementThreshold = (float) args.getDouble(0);
+        int stepThreshold = args.getInt(1);
+        
+        WalkingDetectionService.setSensitivity(movementThreshold, stepThreshold);
+        
+        callbackContext.success("Sensitivity updated");
         return true;
+    } catch (JSONException e) {
+        callbackContext.error("Error parsing sensitivity parameters");
+        return false;
     }
+}
+
+private boolean getSensitivity(CallbackContext callbackContext) {
+    JSONObject result = new JSONObject();
+    try {
+        result.put("movementThreshold", WalkingDetectionService.getMovementThreshold());
+        result.put("stepThreshold", WalkingDetectionService.getStepDetectionThreshold());
+    } catch (JSONException e) {
+        callbackContext.error("Error creating response");
+        return false;
+    }
+    callbackContext.success(result);
+    return true;
+}
     private boolean forceShowOverlay(CallbackContext callbackContext) {
         Context context = cordova.getActivity().getApplicationContext();
         WalkingDetectionService.setManualUnlock(false);

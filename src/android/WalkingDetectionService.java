@@ -44,8 +44,8 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     private static final int TRANSITION_REQUEST_CODE = 100;
     
     // Detección por acelerómetro
-    private static final float MOVEMENT_THRESHOLD = 2.5f; // Umbral de movimiento
-    private static final int STEP_DETECTION_THRESHOLD = 3; // Pasos para activar
+    private static  float MOVEMENT_THRESHOLD = 2.5f; // Umbral de movimiento
+    private static  int STEP_DETECTION_THRESHOLD = 3; // Pasos para activar
     private static final long MOVEMENT_TIMEOUT = 3000; // 3 segundos sin movimiento
     
     private static int movementCount = 0;
