@@ -47,60 +47,62 @@ public class WalkingLockPlugin extends CordovaPlugin {
             return getStepCount(callbackContext);
         } else if ("resetStepCount".equals(action)) {
             return resetStepCount(callbackContext);
-        }else if ("getMovementData".equals(action)) {
+        } else if ("getMovementData".equals(action)) {
             return getMovementData(callbackContext);
         } else if ("resetMovementCount".equals(action)) {
             return resetMovementCount(callbackContext);
-        }else if ("manualUnlock".equals(action)) {
+        } else if ("manualUnlock".equals(action)) {
             return manualUnlock(callbackContext);
-        }else if ("manualUnlock".equals(action)) {
-            return manualUnlock(callbackContext);
-        }
-        else if ("isManuallyUnlocked".equals(action)) {
+        } else if ("isManuallyUnlocked".equals(action)) {
             return isManuallyUnlocked(callbackContext);
-        }
-        else if ("resetManualUnlock".equals(action)) {
+        } else if ("resetManualUnlock".equals(action)) {
             return resetManualUnlock(callbackContext);
-        }else if ("forceShowOverlay".equals(action)) {
-    return forceShowOverlay(callbackContext);
-}
+        } else if ("forceShowOverlay".equals(action)) {
+            return forceShowOverlay(callbackContext);
+        }
         
         return false;
     }
+    
     private boolean forceShowOverlay(CallbackContext callbackContext) {
-    Context context = cordova.getActivity().getApplicationContext();
-    WalkingDetectionService.setManualUnlock(false);
-    WalkingDetectionService.showOverlay(context);
-    
-    callbackContext.success("Overlay forced to show");
-    return true;
-}
-private boolean manualUnlock(CallbackContext callbackContext) {
-    Context context = cordova.getActivity().getApplicationContext();
-    WalkingDetectionService.setManualUnlock(true);
-    WalkingDetectionService.hideOverlay(context);
-    
-    callbackContext.success("Manually unlocked");
-    return true;
-}
-
-private boolean isManuallyUnlocked(CallbackContext callbackContext) {
-    JSONObject result = new JSONObject();
-    try {
-        result.put("isManuallyUnlocked", WalkingDetectionService.isManuallyUnlocked());
-    } catch (JSONException e) {
-        callbackContext.error("Error creating response");
-        return false;
+        Context context = cordova.getActivity().getApplicationContext();
+        WalkingDetectionService.setManualUnlock(false);
+        WalkingDetectionService.showOverlay(context);
+        
+        callbackContext.success("Overlay forced to show");
+        return true;
     }
-    callbackContext.success(result);
-    return true;
-}
+    
+    private boolean manualUnlock(CallbackContext callbackContext) {
+        Context context = cordova.getActivity().getApplicationContext();
+        WalkingDetectionService.setManualUnlock(true);
+        WalkingDetectionService.hideOverlay(context);
+        
+        callbackContext.success("Manually unlocked");
+        return true;
+    }
 
-private boolean resetManualUnlock(CallbackContext callbackContext) {
-    WalkingDetectionService.setManualUnlock(false);
-    callbackContext.success("Manual unlock reset");
-    return true;
-}
+    private boolean isManuallyUnlocked(CallbackContext callbackContext) {
+        JSONObject result = new JSONObject();
+        try {
+            result.put("isManuallyUnlocked", WalkingDetectionService.isManuallyUnlocked());
+        } catch (JSONException e) {
+            callbackContext.error("Error creating response");
+            return false;
+        }
+        callbackContext.success(result);
+        return true;
+    }
+
+    private boolean resetManualUnlock(CallbackContext callbackContext) {
+        WalkingDetectionService.setManualUnlock(false);
+        callbackContext.success("Manual unlock reset");
+        return true;
+    }
+    
+    // ... (el resto de los métodos se mantienen igual)
+    // Solo asegúrate de que no haya métodos duplicados
+    
     private boolean startTracking(CallbackContext callbackContext) {
         // Verificar Google Play Services primero
         if (!isGooglePlayServicesAvailable()) {

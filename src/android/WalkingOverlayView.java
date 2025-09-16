@@ -9,8 +9,8 @@ import android.widget.TextView;
 import android.view.Gravity;
 import android.graphics.PixelFormat;
 import android.os.Build;
-import android.view.MotionEvent;
 import android.util.TypedValue;
+import android.content.Intent;
 
 public class WalkingOverlayView {
     private Context context;
@@ -95,7 +95,6 @@ public class WalkingOverlayView {
                 hide();
                 
                 // Notificar al servicio que se desbloqueó manualmente
-                // Usar broadcast o intent para comunicarse con el servicio
                 Intent unlockIntent = new Intent("MANUAL_UNLOCK_ACTION");
                 context.sendBroadcast(unlockIntent);
             }

@@ -17,6 +17,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 
 import com.google.android.gms.location.ActivityRecognition;
 import com.google.android.gms.location.ActivityRecognitionClient;
@@ -63,9 +65,9 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     private float[] lastAcceleration = new float[3];
     private float[] currentAcceleration = new float[3];
     private long lastSensorTime = 0;
-    private static long lastManualUnlockTime = 0;
     private static boolean isManuallyUnlocked = false;
     private BroadcastReceiver manualUnlockReceiver;
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -73,7 +75,24 @@ public class WalkingDetectionService extends Service implements SensorEventListe
         activityRecognitionClient = ActivityRecognition.getClient(this);
         
         initializeAccelerometer();
+        
+        // Registrar receiver para desbloqueo manual
+        manualUnlockReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if ("MANUAL_UNLOCK_ACTION".equals(intent.getAction())) {
+                    Log.d(TAG, "Recibido broadcast de desbloqueo manual");
+                    setManualUnlock(true);
+                    isMoving = false;
+                    movementCount = 0;
+                }
+            }
+        };
+        
+        IntentFilter filter = new IntentFilter("MANUAL_UNLOCK_ACTION");
+        registerReceiver(manualUnlockReceiver, filter);
     }
+    
     public static void setManualUnlock(boolean unlocked) {
         isManuallyUnlocked = unlocked;
         Log.d(TAG, "Desbloqueo manual: " + (unlocked ? "ACTIVADO" : "DESACTIVADO"));
@@ -82,6 +101,7 @@ public class WalkingDetectionService extends Service implements SensorEventListe
     public static boolean isManuallyUnlocked() {
         return isManuallyUnlocked;
     }
+    
     private void initializeAccelerometer() {
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
@@ -158,27 +178,73 @@ public class WalkingDetectionService extends Service implements SensorEventListe
         if (sensorManager != null) {
             sensorManager.unregisterListener(this);
         }
+        
+        // Desregistrar receiver
+        if (manualUnlockReceiver != null) {
+            unregisterReceiver(manualUnlockReceiver);
+        }
     }
     
     @Override
-public void onSensorChanged(SensorEvent event) {
-    if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-        long currentTime = System.currentTimeMillis();
-        
-        // Si el usuario desbloqueó manualmente, no mostrar overlay
-        if (isManuallyUnlocked) {
-            // Si ya está desbloqueado manualmente, solo verificar movimiento
-            // para reactivar el bloqueo si es necesario
+    public void onSensorChanged(SensorEvent event) {
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            long currentTime = System.currentTimeMillis();
+            
+            // Si el usuario desbloqueó manualmente, no procesar detección de movimiento
+            if (isManuallyUnlocked) {
+                // Solo verificar si hay movimiento para reactivar el bloqueo
+                System.arraycopy(currentAcceleration, 0, lastAcceleration, 0, 3);
+                System.arraycopy(event.values, 0, currentAcceleration, 0, 3);
+                
+                float deltaX = Math.abs(currentAcceleration[0] - lastAcceleration[0]);
+                float deltaY = Math.abs(currentAcceleration[1] - lastAcceleration[1]);
+                float deltaZ = Math.abs(currentAcceleration[2] - lastAcceleration[2]);
+                
+                float totalDelta = deltaX + deltaY + deltaZ;
+                
+                // Si detectamos movimiento significativo, reactivar el bloqueo
+                if (totalDelta > MOVEMENT_THRESHOLD && 
+                    (currentTime - lastSensorTime) > 200) {
+                    
+                    movementCount++;
+                    totalMovements++;
+                    lastMovementTime = currentTime;
+                    lastSensorTime = currentTime;
+                    
+                    Log.d(TAG, "Movimiento detectado durante desbloqueo manual: " + totalDelta);
+                    
+                    // Si se detecta movimiento suficiente, reactivar el bloqueo
+                    if (movementCount >= STEP_DETECTION_THRESHOLD) {
+                        Log.d(TAG, "¡Movimiento detectado! Reactivando bloqueo");
+                        isManuallyUnlocked = false;
+                        isMoving = true;
+                        movementCount = 0; // Resetear contador
+                        showOverlay(this);
+                    }
+                }
+                
+                // Enviar updates periódicamente
+                if (currentTime - lastUpdateTime > UPDATE_INTERVAL) {
+                    sendMovementUpdate();
+                    updateNotification();
+                    lastUpdateTime = currentTime;
+                }
+                
+                return;
+            }
+            
+            // Resto del código para cuando NO está desbloqueado manualmente
             System.arraycopy(currentAcceleration, 0, lastAcceleration, 0, 3);
             System.arraycopy(event.values, 0, currentAcceleration, 0, 3);
             
+            // Calcular la diferencia de aceleración
             float deltaX = Math.abs(currentAcceleration[0] - lastAcceleration[0]);
             float deltaY = Math.abs(currentAcceleration[1] - lastAcceleration[1]);
             float deltaZ = Math.abs(currentAcceleration[2] - lastAcceleration[2]);
             
             float totalDelta = deltaX + deltaY + deltaZ;
             
-            // Si detectamos movimiento significativo, reactivar el bloqueo
+            // Detectar movimiento significativo
             if (totalDelta > MOVEMENT_THRESHOLD && 
                 (currentTime - lastSensorTime) > 200) {
                 
@@ -187,13 +253,12 @@ public void onSensorChanged(SensorEvent event) {
                 lastMovementTime = currentTime;
                 lastSensorTime = currentTime;
                 
-                Log.d(TAG, "Movimiento detectado durante desbloqueo manual: " + totalDelta);
+                Log.d(TAG, "Movimiento detectado: " + totalDelta + " - Count: " + movementCount);
                 
-                // Si se detecta movimiento suficiente, reactivar el bloqueo
-                if (movementCount >= STEP_DETECTION_THRESHOLD) {
-                    Log.d(TAG, "¡Movimiento detectado! Reactivando bloqueo");
-                    isManuallyUnlocked = false;
+                // Detectar si está caminando
+                if (movementCount >= STEP_DETECTION_THRESHOLD && !isMoving) {
                     isMoving = true;
+                    Log.d(TAG, "¡Caminando detectado! Mostrando overlay");
                     showOverlay(this);
                 }
             }
@@ -204,56 +269,8 @@ public void onSensorChanged(SensorEvent event) {
                 updateNotification();
                 lastUpdateTime = currentTime;
             }
-            
-            return;
-        }
-        
-        // Resto del código existente para cuando NO está desbloqueado manualmente
-        System.arraycopy(currentAcceleration, 0, lastAcceleration, 0, 3);
-        System.arraycopy(event.values, 0, currentAcceleration, 0, 3);
-        
-        // Calcular la diferencia de aceleración
-        float deltaX = Math.abs(currentAcceleration[0] - lastAcceleration[0]);
-        float deltaY = Math.abs(currentAcceleration[1] - lastAcceleration[1]);
-        float deltaZ = Math.abs(currentAcceleration[2] - lastAcceleration[2]);
-        
-        float totalDelta = deltaX + deltaY + deltaZ;
-        
-        // Detectar movimiento significativo
-        if (totalDelta > MOVEMENT_THRESHOLD && 
-            (currentTime - lastSensorTime) > 200) {
-            
-            movementCount++;
-            totalMovements++;
-            lastMovementTime = currentTime;
-            lastSensorTime = currentTime;
-            
-            Log.d(TAG, "Movimiento detectado: " + totalDelta + " - Count: " + movementCount);
-            
-            // Detectar si está caminando
-            if (movementCount >= STEP_DETECTION_THRESHOLD && !isMoving) {
-                isMoving = true;
-                Log.d(TAG, "¡Caminando detectado! Mostrando overlay");
-                showOverlay(this);
-            }
-        }
-        
-        // Verificar si dejó de moverse
-        // if (isMoving && (currentTime - lastMovementTime) > MOVEMENT_TIMEOUT) {
-        //     isMoving = false;
-        //     movementCount = 0;
-        //     Log.d(TAG, "Movimiento detenido. Ocultando overlay");
-        //     hideOverlay(this);
-        // }
-        
-        // Enviar updates periódicamente
-        if (currentTime - lastUpdateTime > UPDATE_INTERVAL) {
-            sendMovementUpdate();
-            updateNotification();
-            lastUpdateTime = currentTime;
         }
     }
-}
     
     private void updateNotification() {
         try {
@@ -287,21 +304,21 @@ public void onSensorChanged(SensorEvent event) {
     }
     
     private Notification createNotification() {
-    Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
-    PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 
-        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-    
-    String status = isManuallyUnlocked ? "Desbloqueado Manualmente" : (isMoving ? "Caminando" : "Detenido");
-    String notificationText = String.format("Movimientos: %d | Estado: %s", 
-        movementCount, status);
-    
-    return new NotificationCompat.Builder(this, CHANNEL_ID)
-        .setContentTitle("SafeWalk Activado")
-        .setContentText(notificationText)
-        .setSmallIcon(android.R.drawable.ic_dialog_info)
-        .setPriority(NotificationCompat.PRIORITY_LOW)
-        .setContentIntent(pendingIntent)
-        .setOngoing(true)
+        Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        
+        String status = isManuallyUnlocked ? "Desbloqueado Manualmente" : (isMoving ? "Caminando" : "Detenido");
+        String notificationText = String.format("Movimientos: %d | Estado: %s", 
+            movementCount, status);
+        
+        return new NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("SafeWalk Activado")
+            .setContentText(notificationText)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
             .build();
     }
     
@@ -386,73 +403,28 @@ public void onSensorChanged(SensorEvent event) {
         }
     }
     
-public static void handleActivityTransition(Context context, Intent intent) {
-    if (ActivityTransitionResult.hasResult(intent)) {
-        ActivityTransitionResult result = ActivityTransitionResult.extractResult(intent);
-        
-        for (ActivityTransitionEvent event : result.getTransitionEvents()) {
-            Log.d(TAG, "Activity: " + event.getActivityType() + ", Transition: " + event.getTransitionType());
+    public static void handleActivityTransition(Context context, Intent intent) {
+        if (ActivityTransitionResult.hasResult(intent)) {
+            ActivityTransitionResult result = ActivityTransitionResult.extractResult(intent);
             
-            // Si el usuario desbloqueó manualmente, ignorar transiciones
-            if (isManuallyUnlocked) {
-                Log.d(TAG, "Ignorando transición - desbloqueo manual activo");
-                continue;
-            }
-            
-            if (event.getActivityType() == DetectedActivity.WALKING || 
-                event.getActivityType() == DetectedActivity.ON_FOOT) {
+            for (ActivityTransitionEvent event : result.getTransitionEvents()) {
+                Log.d(TAG, "Activity: " + event.getActivityType() + ", Transition: " + event.getTransitionType());
                 
-                if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_ENTER) {
-                    Log.d(TAG, "Walking/On Foot detected - showing overlay");
-                    showOverlay(context);
-                } 
-                // else if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
-                //     Log.d(TAG, "Walking/On Foot stopped - hiding overlay");
-                //     hideOverlay(context);
-                // }
+                // Si el usuario desbloqueó manualmente, ignorar transiciones
+                if (isManuallyUnlocked) {
+                    Log.d(TAG, "Ignorando transición - desbloqueo manual activo");
+                    continue;
+                }
+                
+                if (event.getActivityType() == DetectedActivity.WALKING || 
+                    event.getActivityType() == DetectedActivity.ON_FOOT) {
+                    
+                    if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_ENTER) {
+                        Log.d(TAG, "Walking/On Foot detected - showing overlay");
+                        showOverlay(context);
+                    }
+                }
             }
         }
     }
-}
-@Override
-public void onCreate() {
-    super.onCreate();
-    createNotificationChannel();
-    activityRecognitionClient = ActivityRecognition.getClient(this);
-    
-    initializeAccelerometer();
-    
-    // Registrar receiver para desbloqueo manual
-    manualUnlockReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if ("MANUAL_UNLOCK_ACTION".equals(intent.getAction())) {
-                Log.d(TAG, "Recibido broadcast de desbloqueo manual");
-                setManualUnlock(true);
-                isMoving = false;
-                movementCount = 0;
-            }
-        }
-    };
-    
-    IntentFilter filter = new IntentFilter("MANUAL_UNLOCK_ACTION");
-    registerReceiver(manualUnlockReceiver, filter);
-}
-
-// En el método onDestroy, desregistrar el receiver:
-@Override
-public void onDestroy() {
-    super.onDestroy();
-    stopActivityRecognition();
-    hideOverlay(this);
-    
-    if (sensorManager != null) {
-        sensorManager.unregisterListener(this);
-    }
-    
-    // Desregistrar receiver
-    if (manualUnlockReceiver != null) {
-        unregisterReceiver(manualUnlockReceiver);
-    }
-}
 }
