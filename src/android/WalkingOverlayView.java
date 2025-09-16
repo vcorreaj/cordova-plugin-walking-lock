@@ -3,16 +3,20 @@ package com.yourcompany.walkinglock;
 import android.content.Context;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.view.Gravity;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.view.MotionEvent;
+import android.util.Log;
 
 public class WalkingOverlayView {
     private Context context;
     private WindowManager windowManager;
     private View overlayView;
+    private static boolean isLocked = true;
     
     public WalkingOverlayView(Context context) {
         this.context = context;
@@ -34,18 +38,18 @@ public class WalkingOverlayView {
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL |
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN |
             WindowManager.LayoutParams.FLAG_DIM_BEHIND |
-            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH |
-            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE, // ¡IMPORTANTE! Bloquea todo táctil
+            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
         );
         
         params.gravity = Gravity.CENTER;
-        params.dimAmount = 0.9f; // Más oscuro
+        params.dimAmount = 0.9f;
         params.x = 0;
         params.y = 0;
         
         try {
             windowManager.addView(overlayView, params);
+            isLocked = true;
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -59,33 +63,55 @@ public class WalkingOverlayView {
                 e.printStackTrace();
             }
             overlayView = null;
+            isLocked = false;
         }
     }
     
+    public static boolean isLocked() {
+        return isLocked;
+    }
+    
     private View createOverlayView() {
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setGravity(Gravity.CENTER);
+        layout.setBackgroundColor(0xCC000000);
+        
         TextView textView = new TextView(context);
         textView.setText("🚷 SafeWalk Activado\n\n" +
                         "¡Estás caminando!\n" +
                         "Pantalla bloqueada por seguridad\n\n" +
-                        "El bloqueo se desactivará automáticamente\n" +
-                        "cuando dejes de caminar");
+                        "Presiona el botón para desbloquear");
         textView.setTextSize(20);
         textView.setTextColor(0xFFFFFFFF);
-        textView.setBackgroundColor(0xCC000000); // Fondo más oscuro
         textView.setGravity(Gravity.CENTER);
-        textView.setPadding(40, 80, 40, 80);
+        textView.setPadding(40, 80, 40, 40);
         textView.setLineSpacing(1.5f, 1.5f);
         
-        // Hacer la vista completamente no táctil
-        textView.setOnTouchListener(new View.OnTouchListener() {
+        Button unlockButton = new Button(context);
+        unlockButton.setText("DESBLOQUEAR");
+        unlockButton.setTextSize(18);
+        unlockButton.setPadding(60, 30, 60, 30);
+        unlockButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                // Bloquear todos los eventos táctiles
-                return true;
+            public void onClick(View v) {
+                Log.d("WalkingOverlayView", "Botón de desbloqueo presionado");
+                hide();
             }
         });
         
-        return textView;
+        layout.addView(textView);
+        layout.addView(unlockButton);
+        
+        // Bloquear eventos táctiles en toda la pantalla excepto en el botón
+        layout.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                return true; // Bloquear todos los eventos táctiles
+            }
+        });
+        
+        return layout;
     }
     
     private int getOverlayType() {

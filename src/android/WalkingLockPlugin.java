@@ -51,9 +51,31 @@ public class WalkingLockPlugin extends CordovaPlugin {
             return getMovementData(callbackContext);
         } else if ("resetMovementCount".equals(action)) {
             return resetMovementCount(callbackContext);
+        }else if ("isLocked".equals(action)) {
+            return isLocked(callbackContext);
+        } else if ("forceUnlock".equals(action)) {
+            return forceUnlock(callbackContext);
         }
         
         return false;
+    }
+    private boolean isLocked(CallbackContext callbackContext) {
+        JSONObject result = new JSONObject();
+        try {
+            result.put("isLocked", WalkingOverlayView.isLocked());
+        } catch (JSONException e) {
+            callbackContext.error("Error creating response");
+            return false;
+        }
+        callbackContext.success(result);
+        return true;
+    }
+
+    private boolean forceUnlock(CallbackContext callbackContext) {
+        Context context = cordova.getActivity().getApplicationContext();
+        WalkingDetectionService.hideOverlay(context);
+        callbackContext.success("Forced unlock");
+        return true;
     }
     
     private boolean startTracking(CallbackContext callbackContext) {

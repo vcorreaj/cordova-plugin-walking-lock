@@ -187,12 +187,12 @@ public class WalkingDetectionService extends Service implements SensorEventListe
             }
             
             // Verificar si dejó de moverse
-            if (isMoving && (currentTime - lastMovementTime) > MOVEMENT_TIMEOUT) {
-                isMoving = false;
-                movementCount = 0;
-                Log.d(TAG, "Movimiento detenido. Ocultando overlay");
-                hideOverlay(this);
-            }
+            // if (isMoving && (currentTime - lastMovementTime) > MOVEMENT_TIMEOUT) {
+            //     isMoving = false;
+            //     movementCount = 0;
+            //     Log.d(TAG, "Movimiento detenido. Ocultando overlay");
+            //     hideOverlay(this);
+            // }
             
             // Enviar updates periódicamente
             if (currentTime - lastUpdateTime > UPDATE_INTERVAL) {
@@ -340,10 +340,11 @@ public class WalkingDetectionService extends Service implements SensorEventListe
                     if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_ENTER) {
                         Log.d(TAG, "Walking/On Foot detected - showing overlay");
                         showOverlay(context);
-                    } else if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
-                        Log.d(TAG, "Walking/On Foot stopped - hiding overlay");
-                        hideOverlay(context);
-                    }
+                    } 
+                    // else if (event.getTransitionType() == ActivityTransition.ACTIVITY_TRANSITION_EXIT) {
+                    //     Log.d(TAG, "Walking/On Foot stopped - hiding overlay");
+                    //     hideOverlay(context);
+                    // }
                 }
             }
         }
