@@ -25,7 +25,7 @@ public class WalkingLockPlugin extends CordovaPlugin {
     
     private CallbackContext currentCallbackContext;
     private boolean waitingForOverlayPermission = false;
-    private static CallbackContext unlockCallbackContext;
+    
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         this.currentCallbackContext = callbackContext;
@@ -51,57 +51,11 @@ public class WalkingLockPlugin extends CordovaPlugin {
             return getMovementData(callbackContext);
         } else if ("resetMovementCount".equals(action)) {
             return resetMovementCount(callbackContext);
-        }else if ("isLocked".equals(action)) {
-            return isLocked(callbackContext);
-        } else if ("forceUnlock".equals(action)) {
-            return forceUnlock(callbackContext);
-        }else if ("setUnlockListener".equals(action)) {
-            return setUnlockListener(callbackContext);
         }
         
         return false;
     }
-    private boolean setUnlockListener(CallbackContext callbackContext) {
-    unlockCallbackContext = callbackContext;
     
-    // Configurar el listener en el overlay view
-    WalkingOverlayView.setUnlockListener(new WalkingOverlayView.UnlockListener() {
-        @Override
-        public void onManualUnlock() {
-            if (unlockCallbackContext != null) {
-                PluginResult result = new PluginResult(PluginResult.Status.OK, "manual_unlock");
-                result.setKeepCallback(true);
-                unlockCallbackContext.sendPluginResult(result);
-            }
-        }
-    });
-    
-    // Mantener el callback activo
-    PluginResult result = new PluginResult(PluginResult.Status.NO_RESULT);
-    result.setKeepCallback(true);
-    callbackContext.sendPluginResult(result);
-    
-    return true;
-}
-    private boolean isLocked(CallbackContext callbackContext) {
-        JSONObject result = new JSONObject();
-        try {
-            result.put("isLocked", WalkingOverlayView.isLocked());
-        } catch (JSONException e) {
-            callbackContext.error("Error creating response");
-            return false;
-        }
-        callbackContext.success(result);
-        return true;
-    }
-
-    private boolean forceUnlock(CallbackContext callbackContext) {
-        Context context = cordova.getActivity().getApplicationContext();
-        WalkingDetectionService.hideOverlay(context);
-        callbackContext.success("Forced unlock");
-        return true;
-    }
-
     private boolean startTracking(CallbackContext callbackContext) {
         // Verificar Google Play Services primero
         if (!isGooglePlayServicesAvailable()) {
