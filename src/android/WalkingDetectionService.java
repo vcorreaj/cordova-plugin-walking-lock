@@ -92,19 +92,19 @@ public class WalkingDetectionService extends Service implements SensorEventListe
         IntentFilter filter = new IntentFilter("MANUAL_UNLOCK_ACTION");
         registerReceiver(manualUnlockReceiver, filter);
     }
-    public static void setSensitivity(float movementThreshold, int stepThreshold) {
-        MOVEMENT_THRESHOLD = movementThreshold;
-        STEP_DETECTION_THRESHOLD = stepThreshold;
-        Log.d(TAG, "Sensibilidad actualizada - Umbral: " + MOVEMENT_THRESHOLD + ", Pasos: " + STEP_DETECTION_THRESHOLD);
-    }
+   public static void setSensitivity(float movementThreshold, int stepThreshold) {
+    MOVEMENT_THRESHOLD = movementThreshold;
+    STEP_DETECTION_THRESHOLD = stepThreshold;
+    Log.d(TAG, "Sensibilidad actualizada - Umbral: " + MOVEMENT_THRESHOLD + ", Pasos: " + STEP_DETECTION_THRESHOLD);
+}
 
-    public static float getMovementThreshold() {
-        return MOVEMENT_THRESHOLD;
-    }
+public static float getMovementThreshold() {
+    return MOVEMENT_THRESHOLD;
+}
 
-    public static int getStepDetectionThreshold() {
-        return STEP_DETECTION_THRESHOLD;
-    }
+public static int getStepDetectionThreshold() {
+    return STEP_DETECTION_THRESHOLD;
+}
     public static void setManualUnlock(boolean unlocked) {
         isManuallyUnlocked = unlocked;
         Log.d(TAG, "Desbloqueo manual: " + (unlocked ? "ACTIVADO" : "DESACTIVADO"));
